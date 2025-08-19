@@ -1,0 +1,16 @@
+tenant-1:
+  dev:
+    account:
+    region: us-east-1
+    name: Proof of Concept Dev
+    cluster_admin_role_name:
+    products_purchased:
+    enable_manual_approval: False
+    applications:
+  prod:
+    account:
+    region: us-east-1
+    name: Example Company Prod
+    products_purchased: []
+    enable_manual_approval: True
+    applications:

@@ -1,0 +1,172 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: ${CLUSTER_NAME}
+  region: ${AWS_REGION}
+  version: "${KUBERNETES_VERSION}"
+  tags:
+    karpenter.sh/discovery: ${CLUSTER_NAME}
+    map-migrated: ${MAP_MIGRATED}
+vpc:
+  id: ${VPC_ID}
+  subnets:
+    private:
+      ${VPC_AZ_1}:
+        id: ${SUBNET_ID_1}
+      ${VPC_AZ_2}:
+        id: ${SUBNET_ID_2}
+  sharedNodeSecurityGroup: ${SG_ID}
+  manageSharedNodeSecurityGroupRules: true
+
+iam:
+  withOIDC: true
+  serviceAccounts:
+  - metadata:
+      name: aws-load-balancer-controller
+      namespace: kube-system
+    wellKnownPolicies:
+      awsLoadBalancerController: true
+  - metadata:
+      name: cert-manager
+      namespace: cert-manager
+    wellKnownPolicies:
+      certManager: true
+  - metadata:
+      name: autoscaler-service
+      namespace: kube-system
+    attachPolicy: # inline policy can be defined along with `attachPolicyARNs`
+      Version: "2012-10-17"
+      Statement:
+      - Effect: Allow
+        Action:
+        - "autoscaling:DescribeAutoScalingGroups"
+        - "autoscaling:DescribeAutoScalingInstances"
+        - "autoscaling:DescribeLaunchConfigurations"
+        - "autoscaling:DescribeTags"
+        - "autoscaling:SetDesiredCapacity"
+        - "autoscaling:TerminateInstanceInAutoScalingGroup"
+        - "ec2:DescribeLaunchTemplateVersions"
+        Resource: '*'
+  - metadata:
+      name: external-secrets-operator
+      namespace: kube-system
+    attachPolicy:
+      Version: "2012-10-17"
+      Statement:
+      - Effect: Allow
+        Action:
+        - "secretsmanager:GetResourcePolicy"
+        - "secretsmanager:GetSecretValue"
+        - "secretsmanager:DescribeSecret"
+        - "secretsmanager:ListSecretVersionIds"
+        - "ssm:GetParameter"
+        Resource: '*'
+  podIdentityAssociations:
+  - namespace: "kube-system"
+    serviceAccountName: karpenter
+    roleName: ${CLUSTER_NAME}-karpenter
+    permissionPolicyARNs:
+    - arn:aws:iam::${TARGET_ACCOUNT_ID}:policy/KarpenterControllerPolicy-${CLUSTER_NAME}
+
+iamIdentityMappings:
+  - arn: arn:aws:iam::${TARGET_ACCOUNT_ID}:role/${CLUSTER_ADMIN_ROLE_NAME}
+    groups:
+      - system:masters
+    username: admin
+    noDuplicateARNs: true # prevents shadowing of ARNs
+  - arn: arn:aws:iam::${TARGET_ACCOUNT_ID}:role/${CODE_BUILD_ROLE_NAME}
+    groups:
+      - system:masters
+    username: codebuild-eks
+  - arn: "arn:aws:iam::${TARGET_ACCOUNT_ID}:role/KarpenterNodeRole-${CLUSTER_NAME}"
+    username: system:node:{{EC2PrivateDNSName}}
+    groups:
+    - system:bootstrappers
+    - system:nodes
+    ## If you intend to run Windows workloads, the kube-proxy group should be specified.
+    # For more information, see https://github.com/aws/karpenter/issues/5099.
+    # - eks:kube-proxy-windows
+
+managedNodeGroups:
+  - name: system-ng
+    labels: { role: system }
+    instanceType: m5.xlarge
+    amiFamily: AmazonLinux2
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 4
+    privateNetworking: true
+
+addonsConfig:
+  autoApplyPodIdentityAssociations: true
+# bear in mind that if either pod identity or IRSA configuration is explicitly set in the config file,
+# or if the addon does not support pod identities,
+# addonsConfig.autoApplyPodIdentityAssociations won't have any effect.
+addons:
+- name: eks-pod-identity-agent
+- name: vpc-cni
+  version: v1.19.3-eksbuild.1
+  attachPolicyARNs:
+    - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+- name: aws-guardduty-agent
+  version: latest
+  attachPolicyARNs:
+    - arn:aws:iam::aws:policy/AmazonGuardDutyFullAccess
+- name: coredns
+  version: latest # auto discovers the latest available
+- name: kube-proxy
+  version: latest
+- name: aws-ebs-csi-driver
+  wellKnownPolicies:      # add IAM and service account
+    ebsCSIController: true
+- name: amazon-cloudwatch-observability
+  version: latest
+  attachPolicyARNs:
+    - arn:aws:iam::aws:policy/CloudwatchAgentServerPolicy
+- name: aws-mountpoint-s3-csi-driver
+  version: latest
+  attachPolicyARNs:
+    - arn:aws:iam::aws:policy/AmazonS3FullAccess
+- name: aws-efs-csi-driver
+  version: latest
+  attachPolicy:
+    Version: "2012-10-17"
+    Statement:
+      - Effect: Allow
+        Action:
+          - "elasticfilesystem:DescribeAccessPoints"
+          - "elasticfilesystem:DescribeFileSystems"
+        Resource: "*"
+      - Effect: Allow
+        Action:
+          - "elasticfilesystem:CreateAccessPoint"
+        Resource: "*"
+        Condition:
+          StringLike:
+            "aws:RequestTag/efs.csi.aws.com/cluster": "true"
+      - Effect: Allow
+        Action:
+          - "elasticfilesystem:TagResource"
+        Resource: "*"
+        Condition:
+          StringLike:
+            "aws:RequestTag/efs.csi.aws.com/cluster": "true"
+      - Effect: Allow
+        Action:
+          - "elasticfilesystem:DeleteAccessPoint"
+        Resource: "*"
+        Condition:
+          StringLike:
+            "aws:ResourceTag/efs.csi.aws.com/cluster": "true"
+      - Effect: Allow
+        Action:
+          - "elasticfilesystem:ClientMount"
+          - "elasticfilesystem:ClientWrite"
+          - "elasticfilesystem:ClientRootAccess"
+        Resource: "*"
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["audit", "authenticator", "scheduler", "api", "controllerManager"]
+    logRetentionInDays: 14

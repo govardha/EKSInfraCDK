@@ -1,0 +1,6 @@
+aws-cdk-lib==2.175.1
+constructs>=10.0.0,<11.0.0
+PyYAML
+pre-commit
+aws-cdk.aws-lambda-python-alpha
+upsert-slr # this library checks if a service linked role for resources like OpenSearch needed or not

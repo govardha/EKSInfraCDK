@@ -1,0 +1,25 @@
+# Non-global SSM parameters created using paths declared below with a prefix
+#  of /tenant_id/target_env/ as defined when creating a PathBuilder object.
+
+# Global parameters
+global:
+  org-id: "aws-organization/id"  # Example; not currently used
+
+# Non-global (environment) parameters
+acm:
+  certificate-arn: "acm/certificate/arn"
+
+efs:
+  file-system-id: "efs/file-system/id"
+
+eks:
+  oidc-id: "eks/oidc/id"
+
+
+vpc:
+  availability-zones: "vpc/availability-zones"
+  cidr-block: "vpc/cidr"
+  id: "vpc/id"
+  route-tables: "vpc/route-tables"
+  s3-endpoint-id: "vpc/s3/endpoint/id"
+  subnet-ids: "vpc/subnet/ids"

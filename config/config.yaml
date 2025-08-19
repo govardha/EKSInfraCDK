@@ -1,0 +1,16 @@
+organization_id:
+iam_identity_center_instance_arn:
+email_subscriptions: ["put-email-here@gmail.com", "put-email-here2@gmail.com"]
+deployment:
+  code_connection_arn:
+  deployment_branch_name: "main"
+  github_owner:
+  github_repo:
+  hosted_zone_arn:
+  hosted_zone_name:
+  karpenter_version: "1.2.1"
+  kubernetes_version: "1.32"
+  project_tags:
+    map-migrated:
+
+applications:
